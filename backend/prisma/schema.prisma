@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  DRIVER
+  SAFETY_OFFICER
+  FINANCIAL_ANALYST
+  UNASSIGNED
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  ON_TRIP
+  IN_SHOP
+  RETIRED
+}
+
+enum TripStatus {
+  DRAFT
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum MaintenanceType {
+  PREVENTIVE
+  CORRECTIVE
+}
+
+enum NotificationType {
+  TRIP_DISPATCHED
+  TRIP_COMPLETED
+  VEHICLE_MAINTENANCE
+  LICENSE_EXPIRING
+  LICENSE_EXPIRED
+  FUEL_LOGGED
+  DRIVER_SUSPENDED
+  ROLE_ASSIGNED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(UNASSIGNED)
+  phone     String?
+  isActive  Boolean  @default(true)
+  isApproved Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tripsAsDriver Trip[] @relation("DriverTrips")
+  fuelExpenses  FuelExpense[]
+  driverProfile DriverProfile?
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Vehicle {
+  id              String        @id @default(uuid())
+  registrationNo  String        @unique
+  make            String
+  model           String
+  year            Int
+  type            String
+  capacity        Int?
+  fuelType        String        @default("Diesel")
+  status          VehicleStatus @default(AVAILABLE)
+  currentMileage  Float         @default(0)
+  purchaseDate    DateTime?
+  purchaseCost    Float?
+  insuranceExpiry DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  trips           Trip[]
+  maintenanceLogs MaintenanceLog[]
+  fuelExpenses    FuelExpense[]
+
+  @@map("vehicles")
+}
+
+model Trip {
+  id            String     @id @default(uuid())
+  vehicleId     String
+  driverId      String?
+  origin        String
+  destination   String
+  distance      Float?
+  distanceCovered Float?
+  cargoWeight   Float?
+  scheduledDate DateTime
+  startTime     DateTime?
+  endTime       DateTime?
+  status        TripStatus @default(DRAFT)
+  notes         String?
+  revenue       Float      @default(0)
+  sourceLat     Float?
+  sourceLng     Float?
+  destLat       Float?
+  destLng       Float?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  vehicle       Vehicle    @relation(fields: [vehicleId], references: [id])
+  driver        User?      @relation("DriverTrips", fields: [driverId], references: [id])
+
+  @@map("trips")
+}
+
+model SystemConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("system_config")
+}
+
+model MaintenanceLog {
+  id              String          @id @default(uuid())
+  vehicleId       String
+  type            MaintenanceType @default(PREVENTIVE)
+  description     String
+  cost            Float
+  serviceProvider String?
+  startDate       DateTime
+  endDate         DateTime?
+  mileageAtService Float?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+
+  @@map("maintenance_logs")
+}
+
+model FuelExpense {
+  id          String   @id @default(uuid())
+  vehicleId   String
+  userId      String?
+  date        DateTime
+  litres      Float
+  costPerLitre Float
+  totalCost   Float
+  odometer    Float
+  fuelStation String?
+  proofImage  String?
+  source      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@map("fuel_expenses")
+}
+
+model DriverProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  licenseNumber   String   @unique
+  licenseCategory String
+  licenseExpiry   DateTime
+  photoData       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("driver_profiles")
+}
+
+model Notification {
+  id              String           @id @default(uuid())
+  userId          String?
+  targetRole      Role?
+  type            NotificationType
+  message         String
+  relatedEntityId String?
+  isRead          Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  user            User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
